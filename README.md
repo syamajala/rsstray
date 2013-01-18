@@ -1,4 +1,0 @@
-rsstray
-=======
-
-Systray RSS Reader

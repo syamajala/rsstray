@@ -1,0 +1,6 @@
+rsstray
+=======
+
+Systray RSS Reader
+
+Requires python-gobject and feedparser on archlinux.

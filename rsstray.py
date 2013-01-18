@@ -1,8 +1,11 @@
+#!/usr/bin/python
 from gi.repository import Gtk, GObject, Gdk
 from gi.repository import Notify
 import feedparser
 import webbrowser
 import threading
+import sched
+import time
         
 class aStatusIcon:
     
@@ -10,13 +13,10 @@ class aStatusIcon:
         self.statusicon = Gtk.StatusIcon()
         self.statusicon.set_from_file("rss.jpg")
         self.statusicon.connect("popup-menu", self.right_click_event)        
-        self.updates = dict()
         self.menu = Gtk.Menu()
+        self.scheduler = sched.scheduler(time.time, time.sleep)
+        self.feeds = feeds
         
-        for i in feeds:
-            self.updates[i[0]] = threading.Timer(i[1], self.update, args=[i[0]])
-            self.updates[i[0]].start()
-
         about = Gtk.MenuItem()
         about.set_label("About")
 
@@ -24,15 +24,16 @@ class aStatusIcon:
         quit.set_label("Quit")
 
         about.connect("activate", self.show_about_dialog)
-        quit.connect("activate", self.quit)
+        quit.connect("activate", Gtk.main_quit)
         
         self.menu.append(about)
         self.menu.append(quit)
 
-    def open_browser(self, url):
-        def open_url(self):
-            webbrowser.open(url)
-        return open_url
+        for i in feeds:
+            self.update(i)
+
+        self.schedthread = threading.Thread(target=self.scheduler.run, daemon=True)
+        self.schedthread.start()
         
     def build_submenu(self, feed):
         menu = Gtk.Menu()
@@ -40,21 +41,32 @@ class aStatusIcon:
         for i in feed.entries:
             menuitem = Gtk.MenuItem()
             menuitem.set_label(i.title)
-            menuitem.connect("activate", self.open_browser(i.link))
+            menuitem.link = i.link
+            menuitem.connect("activate", lambda x: webbrowser.open(x.link))
             menu.append(menuitem)
 
         return menu
         
-    def update(self, url):                
-        pfeed = feedparser.parse(url)
+    def update(self, url):
+        pfeed = feedparser.parse(url[0])
+        initial_update = True
+        
+        for i in self.menu.get_children():
+            if i.get_label() == pfeed.feed.title:
+                i.set_submenu(self.build_submenu(pfeed))
+                initial_update = False
+                break
 
-        feed = Gtk.MenuItem()
-        feed.set_label(pfeed.feed.title)
-        feed.set_submenu(self.build_submenu(pfeed))
+        if initial_update:
+            feed = Gtk.MenuItem()
+            feed.set_label(pfeed.feed.title)
+            feed.set_submenu(self.build_submenu(pfeed))
 
-        self.menu.append(feed)
+            self.menu.append(feed)
 
         Notify.Notification.new(pfeed.feed.title, str(len(pfeed.entries)) + " new articles", "dialog-information").show()
+
+        self.scheduler.enter(url[1], 1, self.update, argument=(url,))
         
     def right_click_event(self, icon, button, time):
         self.menu.show_all()
@@ -63,12 +75,6 @@ class aStatusIcon:
             return (Gtk.StatusIcon.position_menu(menu, icon))
 
         self.menu.popup(None, None, pos, self.statusicon, button, time) 
-
-    def quit(self, arg):
-        for i in self.updates.values():
-            i.cancel()
-        
-        Gtk.main_quit
         
     def show_about_dialog(self, widget):
         about_dialog = Gtk.AboutDialog()
@@ -85,5 +91,5 @@ if __name__ == '__main__':
     GObject.threads_init()
     Gdk.threads_init()
     Notify.init('RSS Tray')
-    aStatusIcon([('http://www.osnews.com/files/recent.xml', 10), ('http://feeds.arstechnica.com/arstechnica/index?format=xml', 10)])
+    aStatusIcon([('http://www.osnews.com/files/recent.xml', 86400), ('http://feeds.arstechnica.com/arstechnica/index?format=xml', 86400)])
     Gtk.main()
