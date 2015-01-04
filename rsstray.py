@@ -6,17 +6,18 @@ import webbrowser
 import threading
 import sched
 import time
-        
-class aStatusIcon:
-    
+
+
+class rsstray:
+
     def __init__(self, feeds):
         self.statusicon = Gtk.StatusIcon()
         self.statusicon.set_from_file("rss.jpg")
-        self.statusicon.connect("popup-menu", self.right_click_event)        
+        self.statusicon.connect("popup-menu", self.right_click_event)
         self.menu = Gtk.Menu()
         self.scheduler = sched.scheduler(time.time, time.sleep)
         self.feeds = feeds
-        
+
         about = Gtk.MenuItem()
         about.set_label("About")
 
@@ -25,16 +26,17 @@ class aStatusIcon:
 
         about.connect("activate", self.show_about_dialog)
         quit.connect("activate", Gtk.main_quit)
-        
+
         self.menu.append(about)
         self.menu.append(quit)
 
         for i in feeds:
             self.update(i)
 
-        self.schedthread = threading.Thread(target=self.scheduler.run, daemon=True)
+        self.schedthread = threading.Thread(target=self.scheduler.run,
+                                            daemon=True)
         self.schedthread.start()
-        
+
     def build_submenu(self, feed):
         menu = Gtk.Menu()
 
@@ -46,11 +48,11 @@ class aStatusIcon:
             menu.append(menuitem)
 
         return menu
-        
+
     def update(self, url):
         pfeed = feedparser.parse(url[0])
         initial_update = True
-        
+
         for i in self.menu.get_children():
             if i.get_label() == pfeed.feed.title:
                 i.set_submenu(self.build_submenu(pfeed))
@@ -67,15 +69,15 @@ class aStatusIcon:
         Notify.Notification.new(pfeed.feed.title, str(len(pfeed.entries)) + " new articles", "dialog-information").show()
 
         self.scheduler.enter(url[1], 1, self.update, argument=(url,))
-        
+
     def right_click_event(self, icon, button, time):
         self.menu.show_all()
 
         def pos(menu, icon):
             return (Gtk.StatusIcon.position_menu(menu, icon))
 
-        self.menu.popup(None, None, pos, self.statusicon, button, time) 
-        
+        self.menu.popup(None, None, pos, self.statusicon, button, time)
+
     def show_about_dialog(self, widget):
         about_dialog = Gtk.AboutDialog()
 
@@ -91,5 +93,8 @@ if __name__ == '__main__':
     GObject.threads_init()
     Gdk.threads_init()
     Notify.init('RSS Tray')
-    aStatusIcon([('http://www.osnews.com/files/recent.xml', 86400), ('http://feeds.arstechnica.com/arstechnica/index?format=xml', 86400)])
+    rsstray([('http://www.osnews.com/files/recent.xml',
+              86400),
+             ('http://feeds.arstechnica.com/arstechnica/index?format=xml',
+              86400)])
     Gtk.main()
