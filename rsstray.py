@@ -14,13 +14,14 @@ import os
 
 class Article():
 
-    def __init__(self, url, title, read=False):
+    def __init__(self, url, title, summary, read=False):
         self.url = url
         self.title = title
         self.read = read
         self.label = None
 
         self.label = Gtk.MenuItem()
+        self.label.set_tooltip_text(summary)
         self.label.set_label(self.title)
         self.label.connect("activate", lambda x: webbrowser.open(self.url))
 
@@ -45,6 +46,7 @@ class Feed():
         self.menu = None
         self.icon = None
         self.label = None
+        self.event = None
 
         self.update()
 
@@ -53,15 +55,16 @@ class Feed():
         try:
             self.pfeed = feedparser.parse(self.url)
 
-            if self.pfeed.bozo:
-                print("feedparser bozo detected.")
+            if isinstance(self.pfeed.bozo_exception,
+                          xml.sax._exceptions.SAXParseException):
+                print("Invalid URL!")
                 raise self.pfeed.bozo_exception
 
             if not self.title:
                     self.title = self.pfeed.feed.title
 
             if not self.articles:
-                self.articles = [Article(i.link, i.title, False)
+                self.articles = [Article(i.link, i.title, i.summary, False)
                                  for i in self.pfeed.entries]
                 Notify.Notification.new(self.title, str(len(self.articles)) +
                                         " new articles.",
@@ -76,21 +79,22 @@ class Feed():
                     if i.link == old_head.url and i.title == old_head.title:
                         break
                     else:
-                        print("updating " + str(nnew))
                         o = self.articles.pop()
                         self.menu.remove(o.label)
 
-                        n = Article(i.link, i.title, False)
+                        n = Article(i.link, i.title, i.summary, False)
                         self.articles.insert(0, n)
                         self.menu.insert(n.label, 0)
 
+                for i in self.articles:
+                    if not i.read:
                         nnew = nnew + 1
 
                 Notify.Notification.new(self.title,
                                         str(nnew) + " new articles.",
                                         "dialog-information").show()
 
-            scheduler.enter(self.refreshrate, 1, self.update)
+            self.event = scheduler.enter(self.refreshrate, 1, self.update)
             if not schedthread.is_alive():
                 schedthread.start()
 
@@ -100,11 +104,21 @@ class Feed():
 
 class Handlers():
 
+    def __init__(self):
+        self.feed_selection = None
+
     def add(self, button):
         feed_window.show_all()
 
     def remove(self, button):
-        pass
+        model, treeiter = self.feed_selection
+
+        if treeiter is not None:
+            feed = feeds.pop(model[treeiter][0])
+            scheduler.cancel(feed.event)
+            feedlist.remove(treeiter)
+            tray_menu.remove(feed.label)
+#            config['feeds'] = feeds
 
     def edit(self, button):
         pass
@@ -112,7 +126,7 @@ class Handlers():
     def feed_ok(self, button):
         try:
             new_feed = Feed(url.get_text(), int(refreshrate.get_text()))
-            feeds[url.get_text()] = new_feed
+            feeds[new_feed.title] = new_feed
             feedlist.append([new_feed.title])
 
             # img = urllib.request.urlopen(new_feed.pfeed.image['href'])
@@ -136,16 +150,26 @@ class Handlers():
             InvalidFeed.destroy()
 
         finally:
-            feed_window.destroy()
+            url.set_text("")
+            refreshrate.set_text("")
+            feed_window.hide()
 
     def feed_cancel(self, button):
-        feed_window.destroy()
+        feed_window.hide()
 
     def config_close(self, button):
         config_window.hide()
 
     def feedlistview_selection(self, selection):
-        pass
+        self.feed_selection = selection.get_selected()
+        model, treeiter = self.feed_selection
+
+        if treeiter is not None:
+#            edit.set_sensitive(True)
+            remove.set_sensitive(True)
+        else:
+#            edit.set_sensitive(False)
+            remove.set_sensitive(False)
 
     def tray_right_click(self, icon, button, ctime):
         while not menu_lock.acquire(1):
@@ -195,6 +219,9 @@ if __name__ == '__main__':
     config_window = builder.get_object("config_window")
     config_notebook = builder.get_object("config_notebook")
     feed_window = builder.get_object("feed_window")
+
+    edit = builder.get_object("edit")
+    remove = builder.get_object("remove")
 
     feedlist = Gtk.ListStore(str)
     feedlistview = builder.get_object("feedlistview")
