@@ -24,6 +24,16 @@ class Article():
         self.label.set_label(self.title)
         self.label.connect("activate", lambda x: webbrowser.open(self.url))
 
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return ((self.title == other.title) and
+                    (self.url == other.url))
+        else:
+            return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
 
 class Feed():
 
@@ -60,18 +70,21 @@ class Feed():
                 for i in self.articles:
                     self.menu.append(i.label)
             else:
-                # remove old articles
+                old_head = self.articles[0]
                 nnew = 0
-
-                for i in range(0, len(self.articles)):
-                    if self.pfeed.entries[i].link == self.articles[i].url:
-                        if not self.articles[i].read:
-                            nnew = nnew + 1
-                        else:
-                            continue
+                for i in self.pfeed.entries:
+                    if i.link == old_head.url and i.title == old_head.title:
+                        break
                     else:
-                        self.menu.remove(self.articles[i].label)
-                        self.articles.pop(i)
+                        print("updating " + str(nnew))
+                        o = self.articles.pop()
+                        self.menu.remove(o.label)
+
+                        n = Article(i.link, i.title, False)
+                        self.articles.insert(0, n)
+                        self.menu.insert(n.label, 0)
+
+                        nnew = nnew + 1
 
                 Notify.Notification.new(self.title,
                                         str(nnew) + " new articles.",
