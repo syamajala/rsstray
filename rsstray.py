@@ -3,6 +3,7 @@ from gi.repository import Gtk, GObject, Gdk
 from gi.repository import Notify
 import feedparser
 import xml
+import opml
 import urllib.request
 import webbrowser
 import threading
@@ -106,6 +107,8 @@ class Handlers():
 
     def __init__(self):
         self.feed_selection = None
+        self.refreshrate_selection = 0
+        self.editfeed = False
 
     def add(self, button):
         feed_window.show_all()
@@ -121,11 +124,11 @@ class Handlers():
 #            config['feeds'] = feeds
 
     def edit(self, button):
-        pass
+        self.editfeed = True
 
     def feed_ok(self, button):
         try:
-            new_feed = Feed(url.get_text(), int(refreshrate.get_text()))
+            new_feed = Feed(url.get_text(), self.refreshrate_selection)
             feeds[new_feed.title] = new_feed
             feedlist.append([new_feed.title])
 
@@ -145,13 +148,13 @@ class Handlers():
             InvalidFeed = Gtk.MessageDialog(feed_window, Gtk.DialogFlags.MODAL,
                                             Gtk.MessageType.ERROR,
                                             Gtk.ButtonsType.OK,
-                                            "Invalid Feed")
+                                            "Invalid feed!")
             InvalidFeed.run()
             InvalidFeed.destroy()
 
         finally:
             url.set_text("")
-            refreshrate.set_text("")
+            refreshrate.set_active(1)
             feed_window.hide()
 
     def feed_cancel(self, button):
@@ -165,10 +168,10 @@ class Handlers():
         model, treeiter = self.feed_selection
 
         if treeiter is not None:
-#            edit.set_sensitive(True)
+            edit.set_sensitive(True)
             remove.set_sensitive(True)
         else:
-#            edit.set_sensitive(False)
+            edit.set_sensitive(False)
             remove.set_sensitive(False)
 
     def tray_right_click(self, icon, button, ctime):
@@ -192,6 +195,18 @@ class Handlers():
 
     def preferences(self, args):
         config_window.show_all()
+
+    def refreshrate_changed(self, combo):
+        try:
+            self.refreshrate_selection = int(combo.get_active_text())*120
+        except ValueError:
+            InvalidRate = Gtk.MessageDialog(feed_window, Gtk.DialogFlags.MODAL,
+                                            Gtk.MessageType.ERROR,
+                                            Gtk.ButtonsType.OK,
+                                            "Invalid refresh rate!")
+            InvalidRate.run()
+            InvalidRate.destroy()
+
 
 if __name__ == '__main__':
 
@@ -232,6 +247,7 @@ if __name__ == '__main__':
 
     url = builder.get_object('url')
     refreshrate = builder.get_object('refreshrate')
+    refreshrate.set_active(1)
 
     renderer = Gtk.CellRendererText()
     feedcolumn = Gtk.TreeViewColumn("Name", renderer, text=0)
